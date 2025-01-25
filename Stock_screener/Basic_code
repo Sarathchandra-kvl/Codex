@@ -1,1 +1,213 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+import matplotlib.pyplot as plt
+plt.style.use('bmh')
 
+rev_data=pd.read_csv('/content/drive/MyDrive/stonks/HistoricalQuotes.csv')
+stock_data=rev_data.iloc[::-1]
+stock_data = stock_data.reset_index(drop=True)
+stock_data.head(100)
+total_days=1950
+stock_data=stock_data[:total_days]
+print(pd.DataFrame(stock_data))
+# stock_data.shape
+
+print(stock_data.columns)
+stock_data.columns = stock_data.columns.str.strip()
+
+stock_data['Close/Last']= stock_data['Close/Last'].str.strip()
+stock_data['Open']= stock_data['Open'].str.strip()
+stock_data['Close/Last'] = stock_data['Close/Last'].str.replace('$', '').str.replace(',', '')
+stock_data['Open'] = stock_data['Open'].str.replace('$', '').str.replace(',', '')
+
+stock_data['Close/Last']= pd.to_numeric(stock_data['Close/Last'])
+
+plt.figure(figsize=(16,8))
+
+plt.title('Close Price History')
+
+plt.xlabel('Date', fontsize=18)
+
+plt.ylabel('Close Price USD ($)', fontsize=18)
+stock_data.columns = stock_data.columns.str.strip()
+
+plt.plot(stock_data['Close/Last'],color='blue',linewidth=1,label='Close Price')
+
+plt.legend(fontsize=16)  # Add a legend
+# plt.grid(visible=True, linestyle='--', alpha=0.5)  # Add a grid for better readability
+# plt.tight_layout()
+# plt.ylim(90, 300)
+# plt.show()
+
+stock_data['daily_return']=pd.to_numeric(stock_data['Close/Last'])-pd.to_numeric(stock_data['Open'])
+stock_data['moving_avg']=stock_data['Close/Last'].rolling(window=50).mean()
+stock_data['volatility'] = stock_data['daily_return'].rolling(window=50).std()
+stock_data['ema_10'] = stock_data['Close/Last'].ewm(span=10, adjust=False).mean()
+stock_data['rsi'] = 100 - (100 / (1 + stock_data['Close/Last'].pct_change().rolling(window=14).mean()))
+
+print(stock_data['daily_return'])
+print(stock_data['moving_avg'])
+print(stock_data['volatility'])
+
+plt.figure(figsize=(16,8))
+
+plt.title('Close Price History')
+
+plt.xlabel('Date', fontsize=18)
+
+plt.ylabel('Close Price USD ($)', fontsize=18)
+# stock_data.columns = stock_data.columns.str.strip()
+
+# plt.plot(stock_data['Close/Last'],color='blue',linewidth=1,label='Close Price')
+plt.plot(stock_data['volatility'],color='red',linewidth=2,label='Volatility')
+plt.plot(stock_data['daily_return'],color='green',linewidth=1,label='Daily returns')
+
+plt.legend(fontsize=16)  # Add a legend
+# plt.grid(visible=True, linestyle='--', alpha=0.5)  # Add a grid for better readability
+# plt.tight_layout()
+# plt.ylim(90, 300)
+plt.show()
+
+future_days=10
+stock_data['Prediction']=stock_data[['Close/Last']].shift(-future_days)
+# stock_data.head(102)
+
+data = stock_data[['Close/Last', 'daily_return', 'moving_avg', 'volatility','ema_10','rsi']].dropna()  # Drop rows with NaN due to moving average calculation
+close_data=stock_data[['Close/Last']]
+X = data[['daily_return', 'moving_avg', 'volatility']][:-future_days]  # Features
+y = data['Close/Last'][:-future_days]  # Target
+print(X)
+print(y)
+
+X_train,X_valid,y_train,y_valid=train_test_split(X,y,test_size=0.2,random_state=6)
+
+model = LinearRegression()
+model.fit(X_train, y_train)
+
+# Make predictions
+predictions = model.predict(X_valid)
+
+plt.figure(figsize=(16,8))
+
+plt.title('Close Price Prediction_linear_regression')
+
+plt.xlabel('Date', fontsize=18)
+
+plt.ylabel('Close Price USD ($)', fontsize=18)
+stock_data.columns = stock_data.columns.str.strip()
+
+plt.plot(predictions,color='blue',linewidth=1,label='Close Price')
+
+plt.legend(fontsize=16)  # Add a legend
+# plt.grid(visible=True, linestyle='--', alpha=0.5)  # Add a grid for better readability
+# plt.tight_layout()
+# plt.ylim(90, 300)
+# plt.show()
+
+from sklearn.metrics import mean_squared_error, r2_score
+
+# Assuming 'y_test' are the actual values and 'predictions' are the predicted values
+
+# Calculate Mean Squared Error (MSE)
+mse = mean_squared_error(y_valid, predictions)
+
+# Calculate Root Mean Squared Error (RMSE)
+rmse = np.sqrt(mse)
+
+# Calculate R-squared
+r2 = r2_score(y_valid, predictions)
+
+# Print the metrics
+print(f"Mean Squared Error (MSE): {mse}")
+print(f"Root Mean Squared Error (RMSE): {rmse}")
+print(f"R-squared: {r2}")
+
+model_tree = RandomForestRegressor()
+model_tree.fit(X_train, y_train)
+
+# Make predictions
+predictions_tree = model_tree.predict(X_valid)
+
+plt.figure(figsize=(16,8))
+
+plt.title('Close Price Prediction_randomforest')
+
+plt.xlabel('Date', fontsize=18)
+
+plt.ylabel('Close Price USD ($)', fontsize=18)
+stock_data.columns = stock_data.columns.str.strip()
+
+plt.plot(predictions,color='blue',linewidth=1,label='Close Price')
+
+plt.legend(fontsize=16)  # Add a legend
+# plt.grid(visible=True, linestyle='--', alpha=0.5)  # Add a grid for better readability
+# plt.tight_layout()
+# plt.ylim(90, 300)
+# plt.show()
+
+from sklearn.metrics import mean_squared_error, r2_score
+
+# Assuming 'y_test' are the actual values and 'predictions' are the predicted values
+
+# Calculate Mean Squared Error (MSE)
+mse = mean_squared_error(y_valid, predictions_tree)
+
+# Calculate Root Mean Squared Error (RMSE)
+rmse = np.sqrt(mse)
+
+# Calculate R-squared
+r2 = r2_score(y_valid, predictions_tree)
+
+# Print the metrics
+print(f"Mean Squared Error (MSE): {mse}")
+print(f"Root Mean Squared Error (RMSE): {rmse}")
+print(f"R-squared: {r2}")
+
+# From the error we can clearly see that random forest gave us better predictions
+model_tree.fit(X_train, y_train)
+X_future = stock_data[['daily_return', 'moving_avg', 'volatility']][total_days-future_days:]
+
+y_future=stock_data['Close/Last'][total_days-future_days:]
+
+future_predictions=model_tree.predict(X_future)
+
+print(pd.DataFrame(future_predictions))
+print(pd.DataFrame(y_future))
+
+plt.figure(figsize=(16,8))
+
+plt.title('Future Close Price Prediction_randomforest')
+
+plt.xlabel('Date', fontsize=18)
+
+plt.ylabel('Close Price USD ($)', fontsize=18)
+stock_data.columns = stock_data.columns.str.strip()
+
+plt.plot(future_predictions,color='blue',linewidth=1,label='Close Price')
+
+plt.legend(fontsize=16)  # Add a legend
+# plt.grid(visible=True, linestyle='--', alpha=0.5)  # Add a grid for better readability
+# plt.tight_layout()
+# plt.ylim(90, 300)
+plt.show()
+
+from sklearn.metrics import mean_squared_error, r2_score
+
+# Assuming 'y_test' are the actual values and 'predictions' are the predicted values
+
+# Calculate Mean Squared Error (MSE)
+mse = mean_squared_error(y_future, future_predictions)
+
+# Calculate Root Mean Squared Error (RMSE)
+rmse = np.sqrt(mse)
+
+# Calculate R-squared
+r2 = r2_score(y_future, future_predictions)
+
+# Print the metrics
+print(f"Mean Squared Error (MSE): {mse}")
+print(f"Root Mean Squared Error (RMSE): {rmse}")
+print(f"R-squared: {r2}")
