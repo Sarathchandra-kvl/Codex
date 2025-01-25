@@ -1,0 +1,116 @@
+import pandas as pd
+import numpy as np
+
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.compose import ColumnTransformer
+from sklearn.model_selection import train_test_split,cross_val_score
+from sklearn.metrics import accuracy_score, classification_report
+from sklearn.model_selection import GridSearchCV
+
+from google.colab import drive
+drive.mount('/content/drive')
+
+X_train_data=pd.read_csv('/content/drive/MyDrive/Hobby_predictor/training_data.csv')
+X_test_data=pd.read_csv('/content/drive/MyDrive/Hobby_predictor/test_data.csv')
+
+X_train_data.head()
+X_train_data.dropna(subset=['Predicted Hobby'],axis=0,inplace=True)
+y_train_data = X_train_data['Predicted Hobby']
+X_train_data.drop(['Predicted Hobby'], axis=1, inplace=True)
+# y_train_data=X_train_data['Predicted Hobby']
+# X_train_data=X_train_data.drop(['Predicted Hobby'],axis=1)
+
+
+X_train_full, X_valid_full, y_train, y_valid = train_test_split(X_train_data, y_train_data,
+                                                                train_size=0.8, test_size=0.2,
+                                                                random_state=6)
+
+categorical_cols=[cname for cname in X_train_full if
+                  X_train_full[cname].nunique()<10 and
+                  X_train_full[cname].dtype=='object']
+pd.DataFrame(categorical_cols)
+
+numerical_cols = [cname for cname in X_train_full.columns if
+                X_train_full[cname].dtype in ['int64', 'float64']]
+pd.DataFrame(numerical_cols)
+
+my_cols = categorical_cols + numerical_cols
+X_train = X_train_full[my_cols].copy()
+X_valid = X_valid_full[my_cols].copy()
+X_test = X_test_data[my_cols].copy()
+
+numerical_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='median')),  # Fill missing values with the mean
+    ('scaler', StandardScaler())  # Standardize numerical data
+])
+categorical_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='most_frequent')),  # Fill missing values with the mode
+    ('onehot', OneHotEncoder(handle_unknown='ignore'))  # One-hot encode categorical features
+])
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', numerical_transformer, numerical_cols),
+        ('cat', categorical_transformer, categorical_cols)
+    ])
+
+param_grid={
+    'n_neighbors':list(range(1,9))
+}
+grid_search = GridSearchCV(KNeighborsClassifier(), param_grid, cv=10, scoring='accuracy')
+diff_models={
+    'KNN':KNeighborsClassifier(),
+    'Random Forest':RandomForestClassifier(n_estimators=200,max_depth=15,min_samples_split=10),
+    'Linear Regression':LogisticRegression()
+}
+res_eachmodel={}
+for name, model in diff_models.items():
+    # Create a pipeline
+    pipeline = Pipeline(steps=[
+        ('preprocessor', preprocessor),
+        ('model', model)
+    ])
+    scores = cross_val_score(pipeline, X_train, y_train, cv=5, scoring='accuracy')
+    res_eachmodel[name] = np.mean(scores)
+    print(f"{name}: Mean CV Accuracy = {np.mean(scores):.4f}")
+diff_models={
+    'KNN':KNeighborsClassifier(),
+    'Random Forest':RandomForestClassifier(),
+    'Linear Regression':LogisticRegression()
+}
+
+
+# X_train.columns=X_train.columns.astype(str)
+# X_valid.columns=X_valid.columns.astype(str)
+
+
+best_model_name = max(res_eachmodel, key=res_eachmodel.get)
+print(f"\nBest Model: {best_model_name} with CV Accuracy = {res_eachmodel[best_model_name]:.4f}")
+
+# Create a pipeline with the best model
+best_model = diff_models[best_model_name]  
+pipeline = Pipeline(steps=[
+    ('preprocessor', preprocessor),
+    ('model', best_model)
+])
+
+# Fit the pipeline to the training data
+pipeline.fit(X_train, y_train)
+
+# Make predictions on the validation set
+y_pred = pipeline.predict(X_valid)
+
+# Evaluate the model's performance
+accuracy = accuracy_score(y_valid, y_pred)
+print(f"Accuracy on Validation Set: {accuracy:.4f}")
+print(classification_report(y_valid, y_pred))
+
+y_test_predict=pipeline.predict(X_test)
+predictions_df = pd.DataFrame(y_test_predict, columns=['Predicted Hobby'])
+predictions_df.to_csv('/content/drive/MyDrive/Hobby_predictor/predictions.csv', index=False)
